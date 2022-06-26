@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script language="javascript" type="text/javascript" src="./flot/jquery.js"></script>
+    <script language="javascript" type="text/javascript" src="./flot/jquery.flot.js"></script>
+    <script language="javascript" type="text/javascript" src="./_data_stockmarketFC.js"></script>
+  </head>
+  <body>
+    <form>
+      <table id="form">
+        <tr>
+          <td><label for="stocksymbol">Stock Symbol:</td>
+          <td><select id="stocksymbol" name="stocksymbol" onchange="updateFlot()"></select></td>
+          <td class="seperator">|</td>
+          <td><label for="stockcyclesper1000px">Zoom:</td>
+          <td><input type="range" id="stockcyclesper1000px" name="stockcyclesper1000px" min="50" max="1000" value="1000" onchange="updateFlot()"></td>
+          <td class="seperator">|</td>
+          <td><label for="runin">Run In:</td>
+          <td><input type="range" id="runin" name="runin" min="10" max="100" value="50" onchange="this.nextElementSibling.innerHTML=this.value; updateFlot()"> (<span>50</span>)</td>
+          <td class="seperator">|</td>
+          <td><label for="dp4slope">Points for Slope:</td>
+          <td><input type="range" id="dp4slope" name="dp4slope" min="25" max="150" value="50" onchange="this.nextElementSibling.innerHTML=this.value; updateFlot()"> (<span>50</span>)</td>
+          <td class="seperator">|</td>
+          <td><label for="dp4slopeslope">Points for SlopeSlope:</td>
+          <td><input type="range" id="dp4slopeslope" name="dp4slopeslope" min="2" max="11" value="2" onchange="this.nextElementSibling.innerHTML=this.value; updateFlot()"> (<span>2</span>)</td>
+        </tr>
+      </table>
+    </form>
+    <div id="cnvscontainer" style="width:95%;height=810px;overflow:scroll">
+      <div id="cnvs"  style="width:1600px;height:800px"></div>
+    </div>
+    <script>
+      const stocksymbols=Object.keys(stockmarket.history.graph);
+      let elem_stocksymbol=document.getElementById("stocksymbol");
+      for(stocksymbol of stocksymbols) {
+        let opt = document.createElement("option");
+        opt.value = stocksymbol;
+        opt.innerHTML = stocksymbol;
+        elem_stocksymbol.appendChild(opt);
+      }
+      elem_stocksymbol.value="ECP";
+      updateFlot();
+
+      function updateFlot() {
+        let dataPoints4slope = +document.getElementById("dp4slope").value;
+        let dataPoints4slopeslope = +document.getElementById("dp4slopeslope").value;
+        let runin = +document.getElementById("runin").value;
+        let scp1000px = +document.getElementById("stockcyclesper1000px").value;
+        let elem_stocksymbol = document.getElementById("stocksymbol");
+        let stocksymbol=elem_stocksymbol.value;
+        let data = stockmarket.history.graph[stocksymbol];//.slice(begin,end);
+        document.getElementById("cnvs").style.width=1000*((data.length-runin)/scp1000px)+"px";
+        let flot = getFlotdata(data, runin, dataPoints4slope, dataPoints4slopeslope);
+        $.plot("#cnvs", flot.data, flot.options);
+      }
+      
+      function getFlotdata(data, runin, dp4slope, dp4slopeslope) {
+        //price
+        let seriesPrice = getSeriesPrice(data);
+        cropRunIn(seriesPrice, runin);
+        let minMaxPrice = getMinMax(seriesPrice.data, 1);
+        seriesPrice.yaxis = 1;
+        seriesPrice.color = "rgb(0,0,0)";
+        //slope
+        let seriesSlope = getSeriesSlope(data, dp4slope);
+        cropRunIn(seriesSlope, runin);
+        let minMaxSlope = getMinMax(seriesSlope.data, 1);
+        if (minMaxSlope.max<-minMaxSlope.min) { minMaxSlope.max=-minMaxSlope.min; } else { minMaxSlope.min=-minMaxSlope.max; }
+        seriesSlope.yaxis = 2;
+        seriesSlope.color = "rgba(127,255,0,0.3)";
+        seriesSlope.lines = { show: true, fill: true, fillColor: "rgba(127,255,0,0.3)" };
+        //slopeslope
+        let seriesSlopeSlope = getSeriesSlopeSlope(seriesSlope.data, dp4slopeslope);
+        cropRunIn(seriesSlopeSlope, runin);
+        let minMaxSlopeSlope = getMinMax(seriesSlopeSlope.data, 1);
+        if (minMaxSlopeSlope.max<-minMaxSlopeSlope.min) { minMaxSlopeSlope.max=-minMaxSlopeSlope.min; } else { minMaxSlopeSlope.min=-minMaxSlopeSlope.max; }
+        seriesSlopeSlope.yaxis = 3;
+        seriesSlopeSlope.color = "rgba(0,0,0,0)";
+        seriesSlopeSlope.lines = { show: true, fill: true, fillColor: "rgba(127,0,255,0.3)" };
+        //forecast
+        let seriesForecast = getSeriesForecast(seriesSlope.data, seriesSlopeSlope.data, dp4slope);
+        seriesForecast.yaxis = 2; //a forecast is a slope somehow
+        seriesForecast.color = "rgba(255,0,0,0.5)";
+        //buyindication
+        let seriesBuy = getSeriesBuy(seriesForecast.data);
+        seriesBuy.yaxis = 4;
+        seriesForecast.color = "rgba(255,0,0,1)";
+        seriesBuy.lines = { show: true, fill: true };
+        //sellindication
+        //let seriesSell = getSeriesSell(seriesForecast.data);
+        //all
+        return {
+          data: [seriesBuy, seriesSlopeSlope, seriesSlope, seriesPrice, seriesForecast],
+          options: {
+            yaxes: [
+              { min: minMaxPrice.min, max: minMaxPrice.max },
+              { min: minMaxSlope.min, max: minMaxSlope.max },
+              { min: minMaxSlopeSlope.min, max: minMaxSlopeSlope.max },
+              { min: 0, max: 1 },
+            ]
+          }
+        };
+      }
+      
+      function getSeriesPrice(data) {
+        let seriesData = data.map(a => [a.x, a.price]);
+        return { label: "price", data: seriesData };
+      }
+      
+      function getSeriesSlope(data, maxDataPoints) {
+        if (maxDataPoints<2) throw "maxDataPoints must be 2 or more";
+        let seriesData = [];
+        let dataLen = data.length;
+        for (let x=1; x<dataLen; x++) {
+          let dataPointCount = Math.min(x+1, maxDataPoints);
+          let dataPoints = data.slice(x+1-dataPointCount, x+1);
+          seriesData.push([data[x].x, calcRegressionParams(dataPoints.map(a => a.price)).slope]);
+        }
+        return { label: "slope", data: seriesData };
+      }
+      
+      function getSeriesSlopeSlope(slopedata, maxDataPoints) {
+        let seriesData = [];
+        let dataLen = slopedata.length;
+        for (let x=1; x<dataLen; x++) {
+          let dataPointCount = Math.min(x+1, maxDataPoints);
+          let dataPoints = slopedata.slice(x+1-dataPointCount, x+1);
+          seriesData.push([slopedata[x][0], calcRegressionParams(dataPoints.map(a => a[1])).slope]);
+        }
+        return { label: "slopeSlope", data: seriesData };
+      }
+      
+      function getSeriesForecast(slopedata, slopeslopedata, dp4slope) {
+        let seriesData = [];
+        let dataLen = slopedata.length;
+        for (let i=0; i<dataLen; i++) {
+          let x=slopedata[i][0];
+          let slopeslope=slopeslopedata.filter(v=>v[0]==x);
+          if (0<slopeslope.length) {
+            seriesData.push([x,slopeslope[0][1]*dp4slope/2+slopedata[i][1]]);
+          }
+        }
+        return { label: "forecast", data: seriesData };
+      }
+      
+      function getSeriesBuy(forecastdata) {
+        let seriesData = forecastdata.map(p=>{if (p[1]>0) return [p[0],1]; else return [p[0],0];});
+        return { label: "buy", data: seriesData };
+      }
+      
+      function cropRunIn(series, runin) {
+        let arrLen = series.data.length;
+        let cropped=[];
+        for (let i=0; i<arrLen; i++) {
+          if (runin<=series.data[i][0]) {
+            cropped.push(series.data[i]);
+          }
+        }
+        series.data = cropped;
+      }
+
+      function getMinMax(arr,prop) {
+        return {
+          "max": arr.reduce((p,c) => Math.max(p,c[prop]), -Number.MAX_VALUE),
+          "min": arr.reduce((p,c) => Math.min(p,c[prop]),  Number.MAX_VALUE)
+        }
+      }
+      
+      function normalized2(arr,prop) {
+        const minmax = getMinMax(arr,prop);
+        return arr.map(function(a){ let obj={"x": a.x}; obj[prop]=(a[prop]-minmax.min)/(minmax.max-minmax.min); return obj; });
+      }
+      
+      function normalized(arr,prop) {
+        const minmax = getMinMax(arr,prop);
+        return arr.map((a) => [a.x, (a[prop]-minmax.min)/(minmax.max-minmax.min)]);
+      }
+      
+      function getDiffs(arr,propX,propY) {
+        var lastValue=0;
+        return arr.reduce(function(p,c){
+          if (p==null) {
+            lastValue=c[propY];
+            return [];
+          } else {
+            let obj = {};
+            obj[propX]=c[propX];
+            obj[propY]=c[propY]-lastValue;
+            lastValue=c[propY];
+            p.push(obj);
+            return p;
+          }
+        },null);
+      }
+      
+      function getForecast(arr, histLen) {
+        /*
+        if (arr.length < histLen) {
+          return 0.5; //neutral
+        }
+        */
+        const histLen2 = Math.min(arr.length, histLen);
+        if (histLen2<2) {
+          return .5; //neutral
+        }
+        var histData = arr.slice(-histLen2);
+        var growPct = 100 * calcRegressionParams(histData).slope / arrayAvg(histData);
+        return 0.5+growPct;
+      }
+        
+      /**
+      * @param {number[]} yValues
+      * @returns {Object}
+      * @returns {number} returnValue.slope
+      * @returns {number} returnValue.intercept
+      */
+      function calcRegressionParams(yValues) {
+        let yAvg = arrayAvg(yValues);
+        let xAvg = yValues.length / 2;
+        let sumDxDy = yValues.reduce((prev, curr, indx) => prev + (curr - yAvg) * (indx - xAvg), 0);
+        let sumDxDx = yValues.reduce((prev, curr, indx) => prev + (indx - xAvg) * (indx - xAvg), 0);
+        let a = sumDxDy / sumDxDx;
+        let b = yAvg - a * xAvg;
+        let retVal = { "slope": a, "intercept": b };
+        return retVal;
+      }
+
+      function arrayAvg(arr) {
+        if (!Array.isArray(arr)) return 0; //undefined?
+        if (arr.length == 0) return 0; //undefined?
+        //arr could contain non numbers, but we ignore that and let the exceptions roll
+        return arr.reduce((prev, curr) => prev + curr) / arr.length;
+      }
+      
+      /* old
+      function change_stocksymbol() {
+        let scp1000px = document.getElementById("stockcyclesper1000px").value;
+        let elem_stocksymbol=document.getElementById("stocksymbol");
+        let stocksymbol=elem_stocksymbol.value;
+        data = stockmarket.history.graph[stocksymbol];//.slice(begin,end);
+        document.getElementById("cnvs").style.width=1000*(data.length/scp1000px)+"px";
+          
+        const forecast = getMinMax(data, "forecast");
+        const diffs = getDiffs(data,"x","price");
+        const diff = getMinMax(diffs, "price");
+        const slopeCount = 40;
+        let slopes = [];
+        for (let i=0; i<data.length; i++) {
+          slopes.push({"x": data[i].x, "slope": getForecast(data.slice(0,i).map((a) => a.price), slopeCount)});
+        }
+        slopes = slopes.slice(Math.floor(slopeCount/2), slopes.length);
+        const slopeslopes = getDiffs(slopes.slice(slopeCount,-1), "x", "slope");
+        let whatif = [];
+        const slopesNorm = normalized2(slopes,"slope");
+        for (ss of normalized2(slopeslopes,"slope")) {
+          whatif.push({"x": ss.x, "ss": ss.slope+slopesNorm.filter(a=>a.x==ss.x)[0].slope});
+        }
+        const buysellindication = whatif.map((a)=>[a.x,((a.ss>1.2)?1:0)]);
+        const flotdata = [
+            data.map((a)=>[a.x,0.5]),//x-axis at 0.5
+            normalized(slopeslopes, "slope"),
+            //{ data: buysellindication, bars: { show: true } },
+            normalized(slopes, "slope"),
+            //normalized(whatif, "ss"),
+            normalized(data, "price"),
+          ];
+        $.plot("#cnvs", flotdata);
+      }
+      //old */
+    </script>
+  </body>
+</html>
