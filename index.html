@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>applusext test 2</title>
+    <title>applusext test 3</title>
   </head>
   <body>
     <span id="DOKUMENT">C:\Temp\test_doc.txt</span>
@@ -10,7 +10,7 @@
       DOKUMENT.onclick = dokumentOpen;
       
       async function dokumentOpen() {
-        window.open("https://www.w3schools.com");
+        window.open('applusext:"' + DOKUMENT.innerHTML + '"');
       }
     </script>
   </body>
