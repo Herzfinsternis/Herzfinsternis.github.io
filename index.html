@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>applusext test 3</title>
+    <title>applusext test 4</title>
   </head>
   <body>
     <span id="DOKUMENT">C:\Temp\test_doc.txt</span>
@@ -10,7 +10,15 @@
       DOKUMENT.onclick = dokumentOpen;
       
       async function dokumentOpen() {
-        window.open('applusext:"' + DOKUMENT.innerHTML + '"');
+        window.open("applusext:" + base64enc(DOKUMENT.innerHTML));
+      }
+      
+      function base64enc(txt) {
+        let ret = btoa(txt);
+        // btoa uses "+", "/" and "="
+        // replace with "-", "*" and "_" to avoid urlencoding
+        ret = ret.replace("+", "-").replace("/", "*").replace("=", "_");
+        return ret;
       }
     </script>
   </body>
