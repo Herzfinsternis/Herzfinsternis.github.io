@@ -1,23 +1,23 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>applusext test 5</title>
+    <title>applusext test 6</title>
   </head>
   <body>
-    <span id="DOKUMENT">C:\Temp\test_doc.txt</span>
+    <input id="DOKUMENT" type="text" value="C:\Temp\test_doc.txt" />
     <script>
       const DOKUMENT = document.getElementById("DOKUMENT");
       DOKUMENT.onclick = dokumentOpen;
       
       async function dokumentOpen() {
-        window.open("applusext:" + base64enc("open\r\n" + DOKUMENT.innerHTML + "\r\n"));
+        window.open("applusext:" + base64enc("open\r\n\"" + DOKUMENT.innerHTML + "\"\r\n"));
       }
       
       function base64enc(txt) {
         let ret = btoa(txt);
         // btoa uses "+", "/" and "="
         // replace with "-", "*" and "_" to avoid urlencoding
-        ret = ret.replace("+", "-").replace("/", "*").replace("=", "_");
+        ret = ret.replaceAll("+", "-").replaceAll("/", "*").replaceAll("=", "_");
         return ret;
       }
     </script>
