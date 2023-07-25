@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>applusext test 4</title>
+    <title>applusext test 5</title>
   </head>
   <body>
     <span id="DOKUMENT">C:\Temp\test_doc.txt</span>
@@ -10,7 +10,7 @@
       DOKUMENT.onclick = dokumentOpen;
       
       async function dokumentOpen() {
-        window.open("applusext:" + base64enc(DOKUMENT.innerHTML));
+        window.open("applusext:" + base64enc("open\r\n" + DOKUMENT.innerHTML + "\r\n"));
       }
       
       function base64enc(txt) {
